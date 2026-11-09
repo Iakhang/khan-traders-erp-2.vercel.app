@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Khan Traders ERP — Lodhran Branch</title>
+<!-- PWA Manifest & Theme Color -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#14243a">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--navy:#14243a;--blue:#2457a7;--bg:#f3f6fb;--line:#e4e9f1;--text:#1d2939;--muted:#667085}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:var(--text);background:var(--bg)}
+.hidden{display:none!important}.center{min-height:100vh;display:grid;place-items:center;padding:20px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 8px 30px #172b4d12;margin-bottom:15px}
+.login{width:min(420px,100%)}label{display:block;font-size:13px;font-weight:600;margin:12px 0 5px}
+input,select,textarea{width:100%;padding:10px 12px;border:1px solid #cfd7e3;border-radius:8px;font:inherit;background:#fff}
+button{border:0;background:var(--blue);color:#fff;padding:8px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px}
+button.secondary{background:#e9eef7;color:var(--navy)}button.danger{background:#b42318;color:#fff}
+button:disabled{opacity:.55;cursor:not-allowed}
+.muted{color:var(--muted);font-size:13px}.error{color:#b42318;white-space:pre-wrap;margin-top:10px;font-size:13px}
+.success{color:#067647;margin-top:10px;font-size:13px}
+header{background:var(--navy);color:#fff;padding:15px 22px;display:flex;justify-content:space-between;align-items:center;gap:12px;position:sticky;top:0;z-index:1000;}
+header h1{font-size:18px;margin:0}.layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 58px)}
+nav{background:#fff;border-right:1px solid var(--line);padding:16px 10px;position:sticky;top:58px;height:calc(100vh - 58px);overflow:auto;}
+nav button{width:100%;text-align:left;margin:3px 0;background:transparent;color:#344054;padding:10px;border-radius:6px;}
+nav button.active,nav button:hover{background:#edf3ff;color:#174ea6}main{padding:22px;min-width:0;overflow:auto;}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:16px 0}
+.metric{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px}.value{font-size:24px;font-weight:700;margin-top:8px}
+.table-wrap{overflow:auto;background:#fff;border:1px solid var(--line);border-radius:12px}table{border-collapse:collapse;width:100%;min-width:650px}
+th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}th{background:#f8fafc;color:#475467}
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.notice{background:#fffaeb;border:1px solid #fedf89;color:#93370d;padding:12px;border-radius:9px;margin:12px 0;font-size:13px}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.item-row{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:end;margin:10px 0}
+@media(max-width:760px){.layout{grid-template-columns:1fr}nav{position:relative;height:auto;display:flex;overflow:auto;border-right:0;border-bottom:1px solid var(--line)}nav button{min-width:max-content;width:auto}main{padding:14px}.item-row{grid-template-columns:1fr 1fr}}
+</style></head>
+<body>
+<section id="loginScreen" class="center"><div class="panel login">
+<h1>Khan Traders ERP</h1><h3>Lodhran Branch (M. Ilyas Khan)</h3><p class="muted">Salesman sign in</p>
+<form id="loginForm"><label>Email</label><input id="email" type="email" autocomplete="username" required>
+<label>Password</label><input id="password" type="password" autocomplete="current-password" required>
+<button id="loginButton" style="width:100%;margin-top:18px">Sign in</button></form><div id="loginMessage" class="error"></div>
+</div></section>
+
+<div id="app" class="hidden">
+<header><h1>KHAN TRADERS — LODHRAN ERP</h1><div style="display:flex;align-items:center;gap:12px"><span id="userLabel" class="muted" style="color:#d0d5dd"></span><button id="logout" class="secondary">Sign out</button></div></header>
+<div class="layout">
+<nav id="menu">
+<button class="active" data-view="dashboard">Dashboard</button>
+<button data-view="products">Products & Sizes</button>
+<button data-view="customers">Customers</button>
+<button data-view="suppliers">Suppliers</button>
+<button data-view="sales">New Sale Invoice</button>
+<button data-view="purchases">New Purchase</button>
+<button data-view="orders">Pending Orders</button>
+<button data-view="stock">Warehouses Stock</button>
+<button data-view="expenses">Expenses</button>
+</nav>
+<main>
+<div class="toolbar"><strong>Branch: Lodhran (ID: 1)</strong><button id="refresh" class="secondary" style="margin-left:auto">Refresh</button></div>
+<div id="content"></div><div id="pageMessage" class="error"></div>
+</main>
+</div></div>
+
+<script>
+(function(){
+var URL="https://hvyuuwbnhnpzyfrsniop.supabase.co";
+var KEY="sb_publishable_nPra_ta6TtRNuJUYhC0LRQ_WMKg1O7t";
+var db=window.supabase.createClient(URL,KEY), BRANCH_ID=1;
+function getEl(id){return document.getElementById(id);}
+var profile=null, activeView="dashboard";
+
+function esc(v){return String(v??"—").replace(/[&<>"']/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]);});}
+function msg(id,t,isSucc){var el=getEl(id);if(el){el.textContent=t||"";el.className=isSucc?"success":"error";}}
+
+async function verify(user){
+  var res=await db.from("profiles").select('*').eq("user_id",user.id);
+  var plist = res.data;
+  if(res.error || !plist || plist.length === 0){
+    var fb = await db.from("profiles").select('*').eq("user-id", user.id);
+    if(fb.error) throw fb.error;
+    plist = fb.data;
+  }
+  var matches=(plist||[]).filter(function(p){return Number(p["branch-id"] || p.branch_id) === BRANCH_ID;});
+  if(!matches.length){await db.auth.signOut();throw new Error("Access denied: Not assigned to Lodhran branch.");}
+  profile=matches[0];
+}
+
+async function countRows(t){
+  try {
+    var q = db.from(t).select("*", { count: "exact", head: true });
+    if(t === "products") q = q.or("branch_id.eq." + BRANCH_ID + ",branch_id.is.null");
+    else q = q.eq("branch_id", BRANCH_ID);
+    var res = await q;
+    return res.count || 0;
+  } catch(e) { return 0; }
+}
+
+async function renderDashboard(){
+  getEl("content").innerHTML = '<h2>Lodhran Branch Dashboard</h2><p class="muted">Loading statistics...</p>';
+  var counts = await Promise.all([countRows("products"), countRows("customers"), countRows("sales"), countRows("purchases"), countRows("expenses"), countRows("stock")]);
+  getEl("content").innerHTML = 
+    '<h2>Lodhran Branch Dashboard</h2>' +
+    '<div class="cards">' +
+      [['Products',counts[0]],['Customers',counts[1]],['Sales Records',counts[2]],['Purchase Records',counts[3]],['Expenses',counts[4]],['Stock Rows',counts[5]]].map(function(m){
+        return '<div class="metric"><div class="muted">' + m[0] + '</div><div class="value">' + m[1] + '</div></div>';
+      }).join("") +
+    '</div>' +
+    '<div class="notice">خوش آمدید! یہ سسٹم اب PWA (آف لائن موبائل ایپ) کے طور पर تیار ہے۔</div>';
+}
+
+async function renderView(v){
+  activeView=v; msg("pageMessage","",false);
+  var btns = document.querySelectorAll("#menu button");
+  for(var i=0; i<btns.length; i++) btns[i].classList.toggle("active", btns[i].getAttribute("data-view")===v);
+  try{
+    if(v==="dashboard"){await renderDashboard();return;}
+    if(v==="sales"){await renderSalesView();return;}
+    if(v==="purchases"){await renderPurchasesView();return;}
+    if(v==="customers"){await renderCustomersView();return;}
+    if(v==="suppliers"){await renderSuppliersView();return;}
+    if(v==="expenses"){await renderExpensesView();return;}
+    if(v==="orders"){await renderOrdersView();return;}
+    if(v==="products"){await renderProductsView();return;}
+    
+    if(v==="stock"){
+      var cols = ["id","warehouse_id","product_id","quantity_cartons","quantity_bottles","updated_at"];
+      var res = await db.from("stock").select(cols.join(",")).eq("branch_id", BRANCH_ID).limit(200);
+      if(res.error) throw res.error;
+      getEl("content").innerHTML = '<h2>Warehouses Stock</h2>' + renderTable(cols, res.data, false);
+      return;
+    }
+  }catch(e){
+    getEl("content").innerHTML="";
+    msg("pageMessage", e.message || String(e), false);
+  }
+}
+
+function renderTable(cols, rows, hasActions, deleteFnName, editFnName){
+  if(!rows || !rows.length) return '<p class="muted" style="padding:16px">No records found.</p>';
+  return '<div class="table-wrap"><table><thead><tr>' + 
+    cols.map(function(c){return '<th>' + esc(c.replaceAll("_"," ").toUpperCase()) + '</th>';}).join("") + 
+    (hasActions ? '<th>ACTIONS</th>' : '') +
+    '</tr></thead><tbody>' +
+    rows.map(function(r){
+      return '<tr>' + cols.map(function(c){return '<td>' + esc(r[c]) + '</td>';}).join("") +
+      (hasActions ? '<td><button class="secondary" onclick="window.' + editFnName + '(' + r.id + ')">Edit</button> <button class="danger" onclick="window.' + deleteFnName + '(' + r.id + ')">Delete</button></td>' : '') +
+      '</tr>';
+    }).join("") + '</tbody></table></div>';
+}
+
+async function renderProductsView(selectedCat){
+  var res = await db.from("products").select("id,product_name,company_name,packing_type,purchase_price,sale_price,is_active").or("branch_id.eq." + BRANCH_ID + ",branch_id.is.null").order("company_name", {ascending: true});
+  if(res.error) throw res.error;
+  var allProducts = res.data || [];
+  var categories = [];
+  allProducts.forEach(function(p){
+    var cat = p.company_name || "General";
+    if(categories.indexOf(cat) === -1) categories.push(cat);
+  });
+  var filteredProducts = selectedCat && selectedCat !== "all" ? 
+    allProducts.filter(function(p){ return (p.company_name || "General") === selectedCat; }) : 
+    allProducts;
+
+  getEl("content").innerHTML = `
+    <h2>Products & Sizes List</h2>
+    <div class="panel" style="display:flex; align-items:center; gap:15px; flex-wrap:wrap;">
+      <label style="margin:0; font-weight:bold;">Filter by Category:</label>
+      <select id="catFilter" style="max-width:250px;" onchange="window.filterProducts(this.value)">
+        <option value="all">All Categories</option>
+        ${categories.map(function(cat){ return '<option value="'+esc(cat)+'" '+(selectedCat===cat?'selected':'')+'>'+esc(cat)+'</option>'; }).join("")}
+      </select>
+    </div>
+    <div class="panel">${renderTable(["id","product_name","company_name","packing_type","purchase_price","sale_price","is_active"], filteredProducts, false)}</div>`;
+}
+window.filterProducts = function(cat){ renderProductsView(cat); };
+
+async function renderCustomersView(editId){
+  var res = await db.from("customers").select("*").eq("branch_id", BRANCH_ID).order("id", {ascending:false});
+  var rows = res.data || [];
+  var editItem = editId ? rows.find(function(x){return x.id === editId;}) : null;
+  
+  getEl("content").innerHTML = `
+    <h2>Customers Management</h2>
+    <div class="panel">
+      <h3>${editItem ? "Edit Customer" : "Add New Customer"}</h3>
+      <form id="custForm" class="form-grid">
+        <input type="hidden" id="cId" value="${editItem ? editItem.id : ''}">
+        <label>Customer Name<input type="text" id="cName" value="${editItem ? esc(editItem.customer_name) : ''}" required></label>
+        <label>Phone<input type="text" id="cPhone" value="${editItem ? esc(editItem.phone) : ''}"></label>
+        <label>Address<input type="text" id="cAddress" value="${editItem ? esc(editItem.address) : ''}"></label>
+        <label>Opening Balance<input type="number" id="cOpBal" value="${editItem ? editItem.opening_balance : 0}" step="0.01"></label>
+        <div style="grid-column:1/-1; margin-top:10px; display:flex; gap:10px;">
+          <button type="submit">${editItem ? "Update Customer" : "Save Customer"}</button>
+          ${editItem ? '<button type="button" class="secondary" onclick="window.cancelCustEdit()">Cancel</button>' : ''}
+        </div>
+      </form>
+      <div id="custMsg"></div>
+    </div>
+    <div class="panel"><h3>Existing Customers</h3>${renderTable(["id","customer_name","phone","address","opening_balance"], rows, true, "deleteCustomer", "editCustomer")}</div>`;
+
+  getEl("custForm").addEventListener("submit", async function(e){
+    e.preventDefault();
+    try {
+      var id = getEl("cId").value;
+      var data = {
+        branch_id: BRANCH_ID,
+        customer_name: getEl("cName").value.trim(),
+        phone: getEl("cPhone").value.trim(),
+        address: getEl("cAddress").value.trim(),
+        opening_balance: parseFloat(getEl("cOpBal").value) || 0
+      };
+      var q = id ? db.from("customers").update(data).eq("id", id) : db.from("customers").insert([data]);
+      var r = await q;
+      if(r.error) throw r.error;
+      alert(id ? "Customer updated successfully!" : "Customer added successfully!");
+      renderCustomersView();
+    } catch(err) { msg("custMsg", err.message, false); }
+  });
+}
+window.editCustomer = function(id){ renderCustomersView(id); };
+window.cancelCustEdit = function(){ renderCustomersView(); };
+window.deleteCustomer = async function(id){
+  if(confirm("Are you sure you want to delete this customer?")){
+    var res = await db.from("customers").delete().eq("id", id);
+    if(res.error) alert("Error: " + res.error.message);
+    else { alert("Customer deleted."); renderCustomersView(); }
+  }
+};
+
+async function renderSuppliersView(editId){
+  var res = await db.from("suppliers").select("*").or("branch_id.eq." + BRANCH_ID + ",branch_id.is.null").order("id", {ascending:false});
+  var rows = res.data || [];
+  var editItem = editId ? rows.find(function(x){return x.id === editId;}) : null;
+
+  getEl("content").innerHTML = `
+    <h2>Suppliers Management</h2>
+    <div class="panel">
+      <h3>${editItem ? "Edit Supplier" : "Add New Supplier"}</h3>
+      <form id="suppForm" class="form-grid">
+        <input type="hidden" id="sId" value="${editItem ? editItem.id : ''}">
+        <label>Supplier Name<input type="text" id="sName" value="${editItem ? esc(editItem.supplier_name) : ''}" required></label>
+        <label>Phone<input type="text" id="sPhone" value="${editItem ? esc(editItem.phone) : ''}"></label>
+        <label>Opening Balance<input type="number" id="sOpBal" value="${editItem ? editItem.opening_balance : 0}" step="0.01"></label>
+        <div style="grid-column:1/-1; margin-top:10px; display:flex; gap:10px;">
+          <button type="submit">${editItem ? "Update Supplier" : "Save Supplier"}</button>
+          ${editItem ? '<button type="button" class="secondary" onclick="window.cancelSuppEdit()">Cancel</button>' : ''}
+        </div>
+      </form>
+      <div id="suppMsg"></div>
+    </div>
+    <div class="panel"><h3>Existing Suppliers</h3>${renderTable(["id","supplier_name","phone","opening_balance"], rows, true, "deleteSupplier", "editSupplier")}</div>`;
+
+  getEl("suppForm").addEventListener("submit", async function(e){
+    e.preventDefault();
+    try {
+      var id = getEl("sId").value;
+      var data = {
+        branch_id: BRANCH_ID,
+        supplier_name: getEl("sName").value.trim(),
+        phone: getEl("sPhone").value.trim(),
+        opening_balance: parseFloat(getEl("sOpBal").value) || 0
+      };
+      var q = id ? db.from("suppliers").update(data).eq("id", id) : db.from("suppliers").insert([data]);
+      var r = await q;
+      if(r.error) throw r.error;
+      alert(id ? "Supplier updated successfully!" : "Supplier added successfully!");
+      renderSuppliersView();
+    } catch(err) { msg("suppMsg", err.message, false); }
+  });
+}
+window.editSupplier = function(id){ renderSuppliersView(id); };
+window.cancelSuppEdit = function(){ renderSuppliersView(); };
+window.deleteSupplier = async function(id){
+  if(confirm("Are you sure you want to delete this supplier?")){
+    var res = await db.from("suppliers").delete().eq("id", id);
+    if(res.error) alert("Error: " + res.error.message);
+    else { alert("Supplier deleted."); renderSuppliersView(); }
+  }
+};
+
+async function renderExpensesView(){
+  var res = await db.from("expenses").select("*").eq("branch_id", BRANCH_ID).order("id", {ascending:false});
+  getEl("content").innerHTML = `
+    <h2>Expenses Management</h2>
+    <div class="panel">
+      <h3>Add New Expense</h3>
+      <form id="addExpForm" class="form-grid">
+        <label>Category<input type="text" id="eCat" required placeholder="Rent, Utility"></label>
+        <label>Amount<input type="number" id="eAmt" required step="0.01"></label>
+        <label>Date<input type="date" id="eDate" required value="${new Date().toISOString().split('T')[0]}"></label>
+        <label>Description<input type="text" id="eDesc"></label>
+        <div style="grid-column:1/-1; margin-top:10px;"><button type="submit">Save Expense</button></div>
+      </form>
+      <div id="expMsg"></div>
+    </div>
+    <div class="panel"><h3>Expenses History</h3>${renderTable(["id","expense_category","amount","expense_date","description"], res.data || [], false)}</div>`;
+
+  getEl("addExpForm").addEventListener("submit", async function(e){
+    e.preventDefault();
+    try {
+      var ins = await db.from("expenses").insert([{
+        branch_id: BRANCH_ID,
+        expense_category: getEl("eCat").value.trim(),
+        amount: parseFloat(getEl("eAmt").value) || 0,
+        expense_date: getEl("eDate").value,
+        description: getEl("eDesc").value.trim()
+      }]);
+      if(ins.error) throw ins.error;
+      alert("Expense added successfully!");
+      renderExpensesView();
+    } catch(err) { msg("expMsg", err.message, false); }
+  });
+}
+
+function buildProductOptionsGrouped(products) {
+  var groups = {};
+  products.forEach(function(p){
+    var cat = p.company_name || p.category || "General / Other";
+    if(!groups[cat]) groups[cat] = [];
+    groups[cat].push(p);
+  });
+  var html = '<option value="">Select product</option>';
+  for(var cat in groups){
+    html += '<optgroup label="' + esc(cat) + '">';
+    groups[cat].forEach(function(p){
+      var label = (p.product_name || "") + (p.packing_type ? " — " + p.packing_type : "");
+      html += '<option value="' + p.id + '">' + esc(label) + '</option>';
+    });
+    html += '</optgroup>';
+  }
+  return html;
+}
+
+async function renderSalesView(){
+  var custRes = await db.from("customers").select("id,customer_name").eq("branch_id", BRANCH_ID);
+  var prodRes = await db.from("products").select("id,product_name,company_name,packing_type,sale_price").or("branch_id.eq." + BRANCH_ID + ",branch_id.is.null").eq("is_active", true).order("company_name", {ascending: true});
+  var productsOptHtml = buildProductOptionsGrouped(prodRes.data || []);
+
+  getEl("content").innerHTML = `
+    <h2>New Sale Invoice — Lodhran</h2>
+    <form id="saleForm" class="panel">
+      <div class="form-grid">
+        <label>Customer<select id="sCust" required><option value="">Select customer</option>${(custRes.data||[]).map(c=>'<option value="'+c.id+'">'+esc(c.customer_name)+'</option>').join("")}</select></label>
+        <label>Paid Amount<input type="number" id="sPaid" value="0" step="0.01" required></label>
+        <label>Payment Method<select id="sMethod"><option value="cash">Cash</option><option value="bank">Bank</option><option value="credit">Credit</option></select></label>
+      </div>
+      <h3>Items</h3>
+      <div id="saleItems"></div>
+      <button type="button" id="addItemRow" class="secondary" style="margin:10px 0;">+ Add Product</button>
+      <div><button type="submit">Save & Finalize Sale Invoice</button></div>
+    </form>`;
+
+  function addRow(){
+    var div = document.createElement("div");
+    div.className = "item-row";
+    div.innerHTML = `
+      <label>Product<select class="sProd" required>${productsOptHtml}</select></label>
+      <label>Cartons / Packs<input type="number" class="sCartons" min="0" value="1" required></label>
+      <label>Bottles<input type="number" class="sBottles" min="0" value="0" required></label>
+      <button type="button" class="secondary" onclick="this.parentElement.remove()">Remove</button>`;
+    getEl("saleItems").appendChild(div);
+  }
+  getEl("addItemRow").addEventListener("click", addRow);
+  addRow();
+
+  getEl("saleForm").addEventListener("submit", async function(e){
+    e.preventDefault();
+    try {
+      var rows = [].slice.call(document.querySelectorAll(".item-row"));
+      var items = rows.map(function(r){
+        return {
+          product_id: Number(r.querySelector(".sProd").value),
+          quantity_cartons: Number(r.querySelector(".sCartons").value) || 0,
+          quantity_bottles: Number(r.querySelector(".sBottles").value) || 0
+        };
+      });
+      var res = await db.rpc("create_sale", {
+        p_branch_id: BRANCH_ID,
+        p_customer_id: Number(getEl("sCust").value),
+        p_items: items,
+        p_paid_amount: parseFloat(getEl("sPaid").value) || 0,
+        p_payment_method: getEl("sMethod").value
+      });
+      if(res.error) throw res.error;
+      alert("Sale invoice created successfully!");
+      renderView("sales");
+    } catch(err) { msg("pageMessage", err.message, false); }
+  });
+}
+
+async function renderPurchasesView(){
+  var suppRes = await db.from("suppliers").select("id,supplier_name").or("branch_id.eq." + BRANCH_ID + ",branch_id.is.null");
+  var prodRes = await db.from("products").select("id,product_name,company_name,packing_type,purchase_price").or("branch_id.eq." + BRANCH_ID + ",branch_id.is.null").eq("is_active", true).order("company_name", {ascending: true});
+  var productsOptHtml = buildProductOptionsGrouped(prodRes.data || []);
+
+  getEl("content").innerHTML = `
+    <h2>New Purchase Entry — Lodhran</h2>
+    <form id="purchaseForm" class="panel">
+      <div class="form-grid">
+        <label>Supplier<select id="pSupp" required><option value="">Select supplier</option>${(suppRes.data||[]).map(s=>'<option value="'+s.id+'">'+esc(s.supplier_name)+'</option>').join("")}</select></label>
+        <label>Paid Amount<input type="number" id="pPaid" value="0" step="0.01" required></label>
+        <label>Payment Method<select id="pMethod"><option value="cash">Cash</option><option value="bank">Bank</option><option value="credit">Credit</option></select></label>
+      </div>
+      <h3>Items</h3>
+      <div id="purchaseItems"></div>
+      <button type="button" id="addPurchaseRow" class="secondary" style="margin:10px 0;">+ Add Product</button>
+      <div><button type="submit">Save Purchase Entry</button></div>
+    </form>`;
+
+  function addRow(){
+    var div = document.createElement("div");
+    div.className = "item-row";
+    div.innerHTML = `
+      <label>Product<select class="pProd" required>${productsOptHtml}</select></label>
+      <label>Cartons<input type="number" class="pCartons" min="0" value="1" required></label>
+      <label>Bottles<input type="number" class="pBottles" min="0" value="0" required></label>
+      <button type="button" class="secondary" onclick="this.parentElement.remove()">Remove</button>`;
+    getEl("purchaseItems").appendChild(div);
+  }
+  getEl("addPurchaseRow").addEventListener("click", addRow);
+  addRow();
+
+  getEl("purchaseForm").addEventListener("submit", async function(e){
+    e.preventDefault();
+    try {
+      var rows = [].slice.call(document.querySelectorAll(".item-row"));
+      var items = rows.map(function(r){
+        return {
+          product_id: Number(r.querySelector(".pProd").value),
+          quantity_carton: Number(r.querySelector(".pCartons").value) || 0,
+          quantity_bottle: Number(r.querySelector(".pBottles").value) || 0
+        };
+      });
+      var res = await db.rpc("create_purchase", {
+        p_branch_id: BRANCH_ID,
+        p_supplier_id: Number(getEl("pSupp").value),
+        p_items: items,
+        p_paid_amount: parseFloat(getEl("pPaid").value) || 0,
+        p_payment_method: getEl("pMethod").value
+      });
+      if(res.error) throw res.error;
+      alert("Purchase saved successfully!");
+      renderView("purchases");
+    } catch(err) { msg("pageMessage", err.message, false); }
+  });
+}
+
+async function renderOrdersView(){
+  getEl("content").innerHTML = '<h2>Pending Orders & Salesman Forms</h2><div class="panel"><p class="muted">سیلز مین کے آرڈرز اور ان کے اسٹیٹس یہاں مینیج ہوتے ہیں۔</p></div>';
+}
+
+getEl("loginForm").addEventListener("submit", async function(e){
+  e.preventDefault();
+  getEl("loginButton").disabled=true; msg("loginMessage","",false);
+  try{
+    var auth=await db.auth.signInWithPassword({email:getEl("email").value.trim(), password:getEl("password").value});
+    if(auth.error) throw auth.error;
+    await verify(auth.data.user);
+    getEl("userLabel").textContent = profile['full-name'] || auth.data.user.email;
+    getEl("loginScreen").classList.add("hidden"); getEl("app").classList.remove("hidden");
+    await renderView("dashboard");
+  }catch(err){ msg("loginMessage", err.message || String(err), false); }
+  finally{ getEl("loginButton").disabled=false; }
+});
+
+getEl("logout").addEventListener("click", async function(){
+  await db.auth.signOut();
+  getEl("app").classList.add("hidden"); getEl("loginScreen").classList.remove("hidden");
+  getEl("password").value="";
+});
+
+getEl("menu").addEventListener("click", function(e){
+  var b=e.target.closest("button[data-view]");
+  if(b) renderView(b.getAttribute("data-view"));
+});
+getEl("refresh").addEventListener("click", function(){renderView(activeView);});
+
+db.auth.getSession().then(async function(res){
+  var sess = res.data.session;
+  if(!sess) return;
+  try{
+    await verify(sess.user);
+    getEl("userLabel").textContent = profile['full-name'] || sess.user.email;
+    getEl("loginScreen").classList.add("hidden"); getEl("app").classList.remove("hidden");
+    await renderView("dashboard");
+  }catch(e){ msg("loginMessage", e.message, false); }
+});
+
+// PWA Service Worker Registration
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function() {
+    navigator.serviceWorker.register("sw.js").then(function(registration) {
+      console.log("ServiceWorker registered: ", registration.scope);
+    }).catch(function(err) {
+      console.log("ServiceWorker registration failed: ", err);
+    });
+  });
+}
+})();
+</script>
+</body>
+</html>

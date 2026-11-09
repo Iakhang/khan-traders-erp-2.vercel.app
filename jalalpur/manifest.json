@@ -1,0 +1,15 @@
+{
+  "name": "Khan Traders Lodhran",
+  "short_name": "Lodhran ERP",
+  "start_url": "./Khan_Traders_Lodhran.html",
+  "display": "standalone",
+  "background_color": "#f3f6fb",
+  "theme_color": "#14243a",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2814/2814833.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
