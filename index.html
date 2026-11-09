@@ -1,13 +1,522 @@
 <!DOCTYPE html>
-<html>
-<head><title>Khan Traders ERP</title></head>
-<body style="font-family:Arial; text-align:center; padding-top:50px; background:#f3f6fb;">
-  <h1>Khan Traders ERP Portal</h1>
-  <p>Select your branch to continue:</p>
-  <div style="margin-top:20px;">
-    <a href="lodhran/index.html" style="padding:12px 20px; background:#2457a7; color:#fff; text-decoration:none; border-radius:6px; margin:5px; display:inline-block;">Lodhran Branch</a>
-    <a href="jalalpur/index.html" style="padding:12px 20px; background:#2457a7; color:#fff; text-decoration:none; border-radius:6px; margin:5px; display:inline-block;">Jalalpur Branch</a>
-    <a href="admin/index.html" style="padding:12px 20px; background:#14243a; color:#fff; text-decoration:none; border-radius:6px; margin:5px; display:inline-block;">Central Admin</a>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Khan Traders ERP — Central Admin Dashboard</title>
+  <!-- PWA Manifest & Theme Color -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#14243a">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root { --navy:#14243a; --blue:#2457a7; --bg:#f3f6fb; --line:#e4e9f1; --text:#1d2939; --muted:#667085; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial, sans-serif; color:var(--text); background:var(--bg); }
+    .hidden { display:none !important; }
+    .login-wrap { min-height:100vh; display:grid; place-items:center; padding:20px; }
+    .panel { background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px; box-shadow:0 8px 30px #172b4d12; margin-bottom: 20px; }
+    .login { width:min(420px,100%); }
+    h1,h2,h3 { margin-top:0; }
+    label { display:block; font-size:13px; font-weight:600; margin:12px 0 5px; }
+    input,select { width:100%; padding:10px 12px; border:1px solid #cfd7e3; border-radius:8px; font:inherit; background:#fff; }
+    button { border:0; background:var(--blue); color:#fff; padding:9px 13px; border-radius:8px; cursor:pointer; font-weight:600; font-size:13px; }
+    button.secondary { background:#e9eef7; color:var(--navy); }
+    button.danger { background:#b42318; color:#fff; }
+    button:disabled { opacity:.55; cursor:not-allowed; }
+    .muted { color:var(--muted); font-size:13px; }
+    .error { color:#b42318; white-space:pre-wrap; margin-top:10px; font-size:13px; }
+    .success { color:#067647; }
+    header { background:var(--navy); color:#fff; padding:15px 22px; display:flex; justify-content:space-between; align-items:center; gap:12px; position:sticky; top:0; z-index:1000; }
+    header h1 { font-size:18px; margin:0; }
+    .layout { display:grid; grid-template-columns:220px 1fr; min-height:calc(100vh - 58px); }
+    nav { background:#fff; border-right:1px solid var(--line); padding:16px 10px; position:sticky; top:58px; height:calc(100vh - 58px); overflow:auto; }
+    nav button { width:100%; text-align:left; margin:3px 0; background:transparent; color:#344054; padding:10px; border-radius:6px; }
+    nav button.active, nav button:hover { background:#edf3ff; color:#174ea6; }
+    main { padding:22px; min-width:0; overflow:auto; }
+    .toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px; }
+    .filter-group { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .filter-group select, .filter-group input { max-width:180px; }
+    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; margin-bottom:18px; }
+    .metric { background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px; }
+    .metric .value { font-size:24px; font-weight:700; margin-top:8px; }
+    .table-wrap { overflow:auto; background:#fff; border:1px solid var(--line); border-radius:12px; }
+    table { border-collapse:collapse; width:100%; min-width:680px; }
+    th,td { padding:11px 12px; border-bottom:1px solid var(--line); text-align:left; font-size:13px; }
+    th { background:#f8fafc; color:#475467; position:sticky; top:0; }
+    .section-title { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom: 15px; }
+    .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+    @media print {
+      header, nav, .toolbar, #logoutButton, #pageMessage { display:none !important; }
+      .layout { display:block !important; }
+      main { padding:0 !important; }
+      .table-wrap { border:none !important; }
+    }
+  </style>
+</head>
+<body>
+  <section id="loginScreen" class="login-wrap">
+    <div class="panel login">
+      <h1>Khan Traders ERP</h1>
+      <p class="muted">Central Admin Sign In</p>
+      <form id="loginForm">
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="username" required />
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" required />
+        <button id="loginButton" type="submit" style="width:100%;margin-top:18px">Sign In</button>
+      </form>
+      <div id="loginMessage" class="error" role="alert"></div>
+    </div>
+  </section>
+
+  <div id="app" class="hidden">
+    <header>
+      <h1>KHAN TRADERS — CENTRAL ADMIN DASHBOARD</h1>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span id="userLabel" style="color:#d0d5dd; font-size:14px;"></span>
+        <button id="logoutButton" class="secondary">Sign Out</button>
+      </div>
+    </header>
+    <div class="layout">
+      <nav id="menu">
+        <button class="active" data-view="dashboard">Dashboard Overview</button>
+        <button data-view="reports">Profit & Loss Reports</button>
+        <button data-view="products">Products List</button>
+        <button data-view="customers">Customers Ledger</button>
+        <button data-view="suppliers">Suppliers Ledger</button>
+        <button data-view="sales">Sales Invoices</button>
+        <button data-view="purchases">Purchases Record</button>
+        <button data-view="stock">Warehouses Stock</button>
+        <button data-view="expenses">Expenses</button>
+      </nav>
+      <main>
+        <div class="toolbar">
+          <div class="filter-group">
+            <label for="branchFilter" style="margin:0">Branch:</label>
+            <select id="branchFilter"><option value="all">All Branches</option></select>
+            <label for="dateFrom" style="margin:0">From:</label>
+            <input type="date" id="dateFrom" />
+            <label for="dateTo" style="margin:0">To:</label>
+            <input type="date" id="dateTo" />
+            <input type="text" id="searchInput" placeholder="Search records..." style="max-width:160px;" />
+          </div>
+          <div>
+            <button id="csvButton" class="secondary">Export CSV</button>
+            <button id="printButton" class="secondary">Print</button>
+            <button id="refreshButton">Refresh</button>
+          </div>
+        </div>
+        <div id="content"></div>
+        <div id="pageMessage" class="error"></div>
+      </main>
+    </div>
   </div>
+
+<script>
+(function(){
+  var SUPABASE_URL = "https://hvyuuwbnhnpzyfrsniop.supabase.co";
+  var SUPABASE_ANON_KEY = "sb_publishable_nPra_ta6TtRNuJUYhC0LRQ_WMKg1O7t";
+  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  function getEl(id) { return document.getElementById(id); }
+
+  var currentUser = null;
+  var adminProfile = null;
+  var activeView = "dashboard";
+  var branches = [];
+  var currentTableData = [];
+
+  function message(id, text, isSuccess) {
+    var el = getEl(id); 
+    if(el) { el.textContent = text || ""; el.className = isSuccess ? "error success" : "error"; }
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, function(c) { 
+      return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; 
+    });
+  }
+
+  function branchName(id) {
+    var b = branches.find(function(x) { return String(x.id) === String(id); });
+    return b ? (b.branch_name || b["branch-name"] || ("Branch " + id)) : (id ?? "Main / Shared");
+  }
+
+  async function loadBranches() {
+    try {
+      var res = await db.from("branches").select('*').order("id");
+      if (res.error || !res.data || res.data.length === 0) {
+        res = await db.from("Branches").select('*').order("id");
+      }
+      if (res.error) throw res.error;
+      branches = res.data || [];
+      getEl("branchFilter").innerHTML = '<option value="all">All Branches</option>' +
+        branches.map(function(b) { 
+          var bName = b.branch_name || b["branch-name"] || b.name || ("Branch " + b.id);
+          return '<option value="' + escapeHtml(b.id) + '">' + escapeHtml(bName) + '</option>'; 
+        }).join("");
+    } catch (err) {
+      branches = [
+        { id: 1, branch_name: "Lodhran" },
+        { id: 2, branch_name: "Jalalpur Pirwala" }
+      ];
+      getEl("branchFilter").innerHTML = '<option value="all">All Branches</option>' +
+        '<option value="1">Lodhran</option>' +
+        '<option value="2">Jalalpur Pirwala</option>';
+    }
+  }
+
+  async function verifyAdmin(user) {
+    var res = await db.from("profiles").select('*').eq("user_id", user.id);
+    var profileList = res.data;
+    if (res.error || !profileList || profileList.length === 0) {
+      var fallback = await db.from("profiles").select('*').eq("user-id", user.id);
+      if (fallback.error) throw fallback.error;
+      profileList = fallback.data;
+    }
+
+    var matches = (profileList || []).filter(function(p) { 
+      return String(p.role || "").trim().toLowerCase() === "admin"; 
+    });
+    if (!matches.length) {
+      await db.auth.signOut();
+      throw new Error("Access Denied: This account does not have Central Admin rights.");
+    }
+    adminProfile = matches[0];
+  }
+
+  async function signIn(email, password) {
+    message("loginMessage", "", false);
+    getEl("loginButton").disabled = true;
+    try {
+      var authRes = await db.auth.signInWithPassword({ email: email, password: password });
+      if (authRes.error) throw authRes.error;
+      currentUser = authRes.data.user;
+      await verifyAdmin(currentUser);
+      await loadBranches();
+      getEl("userLabel").textContent = "Admin: " + (adminProfile.full_name || adminProfile["full-name"] || currentUser.email);
+      getEl("loginScreen").classList.add("hidden");
+      getEl("app").classList.remove("hidden");
+      await renderView("dashboard");
+    } catch (e) {
+      message("loginMessage", e.message || String(e), false);
+    } finally { getEl("loginButton").disabled = false; }
+  }
+
+  async function signOut() {
+    await db.auth.signOut();
+    currentUser = null; adminProfile = null;
+    getEl("app").classList.add("hidden"); 
+    getEl("loginScreen").classList.remove("hidden");
+    getEl("password").value = "";
+  }
+
+  function applyFilters(query, tableName, dateColumn) {
+    var branch = getEl("branchFilter").value;
+    var from = getEl("dateFrom").value;
+    var to = getEl("dateTo").value;
+
+    if (branch !== "all") {
+      if (tableName === "products") {
+        query = query.or("branch_id.eq." + Number(branch) + ",branch_id.is.null");
+      } else {
+        query = query.eq("branch_id", Number(branch));
+      }
+    }
+    if (dateColumn && from) query = query.gte(dateColumn, from);
+    if (dateColumn && to) query = query.lte(dateColumn, to);
+    return query;
+  }
+
+  function renderTable(columns, rows, hasActions, deleteFnName, editFnName) {
+    var searchTxt = (getEl("searchInput").value || "").toLowerCase();
+    var filteredRows = rows.filter(function(r) {
+      if (!searchTxt) return true;
+      return Object.values(r).some(function(val) {
+        return String(val ?? "").toLowerCase().indexOf(searchTxt) !== -1;
+      });
+    });
+
+    currentTableData = filteredRows;
+    if (!filteredRows.length) return '<p class="muted" style="padding:16px">No records found.</p>';
+    
+    return '<div class="table-wrap"><table><thead><tr>' + 
+      columns.map(function(c) { return '<th>' + escapeHtml(c.replaceAll("_"," ").toUpperCase()) + '</th>'; }).join("") + 
+      (hasActions ? '<th>ACTIONS</th>' : '') +
+      '</tr></thead><tbody>' +
+      filteredRows.map(function(row) {
+        return '<tr>' + columns.map(function(c) { 
+          return '<td>' + escapeHtml(c === "branch_id" ? branchName(row[c]) : row[c]) + '</td>'; 
+        }).join("") +
+        (hasActions ? '<td><button class="secondary" onclick="window.' + editFnName + '(' + row.id + ')">Edit</button> <button class="danger" onclick="window.' + deleteFnName + '(' + row.id + ')">Delete</button></td>' : '') +
+        '</tr>';
+      }).join("") + '</tbody></table></div>';
+  }
+
+  async function renderDashboard() {
+    var salesQ = applyFilters(db.from("sales").select("total_amount"), "sales", null);
+    var expQ = applyFilters(db.from("expenses").select("amount"), "expenses", null);
+    var purQ = applyFilters(db.from("purchases").select("total_amount"), "purchases", null);
+
+    var resArr = await Promise.all([salesQ, expQ, purQ]);
+
+    var totalSales = (resArr[0].data || []).reduce(function(sum, r) { return sum + (Number(r.total_amount) || 0); }, 0);
+    var totalExpenses = (resArr[1].data || []).reduce(function(sum, r) { return sum + (Number(r.amount) || 0); }, 0);
+    var totalPurchases = (resArr[2].data || []).reduce(function(sum, r) { return sum + (Number(r.total_amount) || 0); }, 0);
+    var netProfit = totalSales - (totalPurchases + totalExpenses);
+
+    getEl("content").innerHTML = 
+      '<div class="section-title"><h2>Dashboard Overview</h2><span class="muted">Consolidated Live Data</span></div>' +
+      '<div class="cards">' +
+        '<div class="metric"><div class="muted">Total Sales</div><div class="value">Rs. ' + totalSales.toLocaleString() + '</div></div>' +
+        '<div class="metric"><div class="muted">Total Purchases</div><div class="value">Rs. ' + totalPurchases.toLocaleString() + '</div></div>' +
+        '<div class="metric"><div class="muted">Total Expenses</div><div class="value">Rs. ' + totalExpenses.toLocaleString() + '</div></div>' +
+        '<div class="metric"><div class="muted">Estimated Net Profit</div><div class="value" style="color:' + (netProfit >= 0 ? '#067647':'#b42318') + '">Rs. ' + netProfit.toLocaleString() + '</div></div>' +
+      '</div>' +
+      '<div class="panel"><h3>Active Branches Summary</h3>' + renderTable(["id", "branch_name"], branches, false) + '</div>';
+  }
+
+  async function renderProfitLossReport() {
+    var salesQ = applyFilters(db.from("sales").select("total_amount, paid_amount, sale_date"), "sales", "sale_date");
+    var expQ = applyFilters(db.from("expenses").select("amount, expense_date, expense_category"), "expenses", "expense_date");
+    var purQ = applyFilters(db.from("purchases").select("total_amount, paid_amount, purchase_date"), "purchases", "purchase_date");
+
+    var resArr = await Promise.all([salesQ, expQ, purQ]);
+
+    var salesTotal = (resArr[0].data || []).reduce(function(sum, r) { return sum + (Number(r.total_amount) || 0); }, 0);
+    var purchasesTotal = (resArr[2].data || []).reduce(function(sum, r) { return sum + (Number(r.total_amount) || 0); }, 0);
+    var expensesTotal = (resArr[1].data || []).reduce(function(sum, r) { return sum + (Number(r.amount) || 0); }, 0);
+    var netProfit = salesTotal - (purchasesTotal + expensesTotal);
+
+    getEl("content").innerHTML = 
+      '<div class="section-title"><h2>Profit & Loss Report</h2></div>' +
+      '<div class="panel">' +
+        '<table style="width:100%; min-width:auto;">' +
+          '<tr><td><strong>Total Revenue (Sales)</strong></td><td style="text-align:right"><strong>Rs. ' + salesTotal.toLocaleString() + '</strong></td></tr>' +
+          '<tr><td>Less: Total Purchases (COGS)</td><td style="text-align:right">Rs. ' + purchasesTotal.toLocaleString() + '</td></tr>' +
+          '<tr><td>Less: Operational Expenses</td><td style="text-align:right">Rs. ' + expensesTotal.toLocaleString() + '</td></tr>' +
+          '<tr style="border-top:2px solid #14243a; font-size:16px;">' +
+            '<td><strong>Net Profit / (Loss)</strong></td>' +
+            '<td style="text-align:right; color:' + (netProfit >= 0 ? '#067647':'#b42318') + '"><strong>Rs. ' + netProfit.toLocaleString() + '</strong></td>' +
+          '</tr>' +
+        '</table>' +
+      '</div>';
+  }
+
+  async function renderCustomersView(editId) {
+    var q = db.from("customers").select("*").order("id", {ascending:false});
+    var branch = getEl("branchFilter").value;
+    if(branch !== "all") q = q.eq("branch_id", Number(branch));
+    var res = await q;
+    var rows = res.data || [];
+    var editItem = editId ? rows.find(function(x){return x.id === editId;}) : null;
+
+    getEl("content").innerHTML = 
+      '<div class="section-title"><h2>Customers Ledger</h2></div>' +
+      '<div class="panel">' +
+        '<h3>' + (editItem ? "Edit Customer" : "Add New Customer") + '</h3>' +
+        '<form id="custForm" class="form-grid">' +
+          '<input type="hidden" id="cId" value="' + (editItem ? editItem.id : '') + '">' +
+          '<label>Customer Name<input type="text" id="cName" value="' + (editItem ? escapeHtml(editItem.customer_name) : '') + '" required></label>' +
+          '<label>Phone<input type="text" id="cPhone" value="' + (editItem ? escapeHtml(editItem.phone) : '') + '"></label>' +
+          '<label>Address<input type="text" id="cAddress" value="' + (editItem ? escapeHtml(editItem.address) : '') + '"></label>' +
+          '<label>Opening Balance<input type="number" id="cOpBal" value="' + (editItem ? editItem.opening_balance : 0) + '" step="0.01"></label>' +
+          '<div style="grid-column:1/-1; margin-top:10px; display:flex; gap:10px;">' +
+            '<button type="submit">' + (editItem ? "Update Customer" : "Save Customer") + '</button>' +
+            (editItem ? '<button type="button" class="secondary" onclick="window.cancelCustEdit()">Cancel</button>' : '') +
+          '</div>' +
+        '</form>' +
+        '<div id="custMsg"></div>' +
+      '</div>' +
+      '<div class="panel"><h3>Existing Customers</h3>' + renderTable(["id","branch_id","customer_name","phone","address","opening_balance"], rows, true, "deleteCustomer", "editCustomer") + '</div>';
+
+    getEl("custForm").addEventListener("submit", async function(e){
+      e.preventDefault();
+      try {
+        var id = getEl("cId").value;
+        var bId = branch !== "all" ? Number(branch) : 1;
+        var data = {
+          branch_id: bId,
+          customer_name: getEl("cName").value.trim(),
+          phone: getEl("cPhone").value.trim(),
+          address: getEl("cAddress").value.trim(),
+          opening_balance: parseFloat(getEl("cOpBal").value) || 0
+        };
+        var qry = id ? db.from("customers").update(data).eq("id", id) : db.from("customers").insert([data]);
+        var r = await qry;
+        if(r.error) throw r.error;
+        alert(id ? "Customer updated successfully!" : "Customer added successfully!");
+        renderCustomersView();
+      } catch(err) { message("custMsg", err.message, false); }
+    });
+  }
+  window.editCustomer = function(id){ renderCustomersView(id); };
+  window.cancelCustEdit = function(){ renderCustomersView(); };
+  window.deleteCustomer = async function(id){
+    if(confirm("Are you sure you want to delete this customer?")){
+      var res = await db.from("customers").delete().eq("id", id);
+      if(res.error) alert("Error: " + res.error.message);
+      else { alert("Customer deleted."); renderCustomersView(); }
+    }
+  };
+
+  async function renderSuppliersView(editId) {
+    var q = db.from("suppliers").select("*").order("id", {ascending:false});
+    var branch = getEl("branchFilter").value;
+    if(branch !== "all") q = q.or("branch_id.eq." + Number(branch) + ",branch_id.is.null");
+    var res = await q;
+    var rows = res.data || [];
+    var editItem = editId ? rows.find(function(x){return x.id === editId;}) : null;
+
+    getEl("content").innerHTML = 
+      '<div class="section-title"><h2>Suppliers Ledger</h2></div>' +
+      '<div class="panel">' +
+        '<h3>' + (editItem ? "Edit Supplier" : "Add New Supplier") + '</h3>' +
+        '<form id="suppForm" class="form-grid">' +
+          '<input type="hidden" id="sId" value="' + (editItem ? editItem.id : '') + '">' +
+          '<label>Supplier Name<input type="text" id="sName" value="' + (editItem ? escapeHtml(editItem.supplier_name) : '') + '" required></label>' +
+          '<label>Phone<input type="text" id="sPhone" value="' + (editItem ? escapeHtml(editItem.phone) : '') + '"></label>' +
+          '<label>Opening Balance<input type="number" id="sOpBal" value="' + (editItem ? editItem.opening_balance : 0) + '" step="0.01"></label>' +
+          '<div style="grid-column:1/-1; margin-top:10px; display:flex; gap:10px;">' +
+            '<button type="submit">' + (editItem ? "Update Supplier" : "Save Supplier") + '</button>' +
+            (editItem ? '<button type="button" class="secondary" onclick="window.cancelSuppEdit()">Cancel</button>' : '') +
+          '</div>' +
+        '</form>' +
+        '<div id="suppMsg"></div>' +
+      '</div>' +
+      '<div class="panel"><h3>Existing Suppliers</h3>' + renderTable(["id","branch_id","supplier_name","phone","opening_balance"], rows, true, "deleteSupplier", "editSupplier") + '</div>';
+
+    getEl("suppForm").addEventListener("submit", async function(e){
+      e.preventDefault();
+      try {
+        var id = getEl("sId").value;
+        var bId = branch !== "all" ? Number(branch) : 1;
+        var data = {
+          branch_id: bId,
+          supplier_name: getEl("sName").value.trim(),
+          phone: getEl("sPhone").value.trim(),
+          opening_balance: parseFloat(getEl("sOpBal").value) || 0
+        };
+        var qry = id ? db.from("suppliers").update(data).eq("id", id) : db.from("suppliers").insert([data]);
+        var r = await qry;
+        if(r.error) throw r.error;
+        alert(id ? "Supplier updated successfully!" : "Supplier added successfully!");
+        renderSuppliersView();
+      } catch(err) { message("suppMsg", err.message, false); }
+    });
+  }
+  window.editSupplier = function(id){ renderSuppliersView(id); };
+  window.cancelSuppEdit = function(){ renderSuppliersView(); };
+  window.deleteSupplier = async function(id){
+    if(confirm("Are you sure you want to delete this supplier?")){
+      var res = await db.from("suppliers").delete().eq("id", id);
+      if(res.error) alert("Error: " + res.error.message);
+      else { alert("Supplier deleted."); renderSuppliersView(); }
+    }
+  };
+
+  async function renderView(view) {
+    activeView = view;
+    message("pageMessage", "", false);
+    var buttons = document.querySelectorAll("#menu button");
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].classList.toggle("active", buttons[i].getAttribute("data-view") === view);
+    }
+
+    try {
+      if (view === "dashboard") { await renderDashboard(); return; }
+      if (view === "reports") { await renderProfitLossReport(); return; }
+      if (view === "customers") { await renderCustomersView(); return; }
+      if (view === "suppliers") { await renderSuppliersView(); return; }
+
+      var viewsMap = {
+        products: { title:"Products List", table:"products", cols:["id","branch_id","product_name","company_name","packing_type","purchase_price","sale_price","is_active"], dateCol:null },
+        sales: { title:"Sales Record", table:"sales", cols:["id","branch_id","invoice_number","sale_date","payment_type","total_amount","paid_amount"], dateCol:"sale_date" },
+        purchases: { title:"Purchases Record", table:"purchases", cols:["id","branch_id","invoice_number","purchase_date","payment_type","total_amount","paid_amount"], dateCol:"purchase_date" },
+        stock: { title:"Stock Inventory", table:"stock", cols:["id","branch_id","warehouse_id","product_id","quantity_cartons","quantity_bottles"], dateCol:null },
+        expenses: { title:"Expenses Record", table:"expenses", cols:["id","branch_id","expense_category","amount","expense_date","description"], dateCol:"expense_date" }
+      };
+
+      var cfg = viewsMap[view];
+      if(!cfg) return;
+
+      var q = db.from(cfg.table).select(cfg.cols.join(",")).order("id", { ascending: false }).limit(500);
+      q = applyFilters(q, cfg.table, cfg.dateCol);
+      var res = await q;
+      if (res.error) throw res.error;
+
+      getEl("content").innerHTML = 
+        '<div class="section-title"><h2>' + cfg.title + '</h2><span class="muted">Records count: ' + res.data.length + '</span></div>' +
+        renderTable(cfg.cols, res.data || [], false);
+    } catch (e) {
+      getEl("content").innerHTML = "";
+      message("pageMessage", "Database Error: " + (e.message || String(e)), false);
+    }
+  }
+
+  function exportCSV() {
+    if (!currentTableData || !currentTableData.length) {
+      alert("No data available to export.");
+      return;
+    }
+    var headers = Object.keys(currentTableData[0]).join(",");
+    var rows = currentTableData.map(function(row) {
+      return Object.values(row).map(function(v) { return '"' + String(v ?? '').replace(/"/g, '""') + '"'; }).join(",");
+    });
+    var csvContent = "data:text/csv;charset=utf-8," + [headers].concat(rows).join("\n");
+    var encodedUri = encodeURI(csvContent);
+    var link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "Khan_Traders_" + activeView + "_Report.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  getEl("loginForm").addEventListener("submit", function(e) {
+    e.preventDefault();
+    signIn(getEl("email").value.trim(), getEl("password").value);
+  });
+  getEl("logoutButton").addEventListener("click", signOut);
+  
+  getEl("menu").addEventListener("click", function(e) {
+    var btn = e.target.closest("button[data-view]");
+    if (btn) renderView(btn.getAttribute("data-view"));
+  });
+
+  getEl("branchFilter").addEventListener("change", function() { renderView(activeView); });
+  getEl("dateFrom").addEventListener("change", function() { renderView(activeView); });
+  getEl("dateTo").addEventListener("change", function() { renderView(activeView); });
+  getEl("searchInput").addEventListener("input", function() { renderView(activeView); });
+  getEl("refreshButton").addEventListener("click", function() { renderView(activeView); });
+  getEl("printButton").addEventListener("click", function() { window.print(); });
+  getEl("csvButton").addEventListener("click", exportCSV);
+
+  db.auth.getSession().then(async function(sessionRes) {
+    var sessionData = sessionRes.data;
+    if (!sessionData || !sessionData.session) return;
+    try {
+      currentUser = sessionData.session.user;
+      await verifyAdmin(currentUser);
+      await loadBranches();
+      getEl("userLabel").textContent = "Admin: " + (adminProfile.full_name || adminProfile["full-name"] || currentUser.email);
+      getEl("loginScreen").classList.add("hidden"); 
+      getEl("app").classList.remove("hidden");
+      await renderView("dashboard");
+    } catch (e) { message("loginMessage", e.message || String(e), false); }
+  });
+
+  // PWA Service Worker Registration
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function() {
+      navigator.serviceWorker.register("sw.js").then(function(registration) {
+        console.log("ServiceWorker registered: ", registration.scope);
+      }).catch(function(err) {
+        console.log("ServiceWorker registration failed: ", err);
+      });
+    });
+  }
+})();
+</script>
 </body>
 </html>
